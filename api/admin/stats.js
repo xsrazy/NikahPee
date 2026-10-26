@@ -1,4 +1,4 @@
-const { loadDB, getAuth, send, sendError, fail } = require('../_lib');
+const { loadDB, getAuth, send, sendError, fail, rateLimit, clientIp } = require('../_lib');
 
 module.exports = async (req, res) => {
     if (req.method !== 'GET') {
@@ -9,6 +9,9 @@ module.exports = async (req, res) => {
         const auth = getAuth(req, db);
         if (!auth || !auth.admin) {
             return sendError(res, 401, 'Unauthorized');
+        }
+        if (!rateLimit(`adm-stats:${clientIp(req)}`, 120, 60 * 1000)) {
+            return sendError(res, 429, 'Terlalu banyak permintaan. Coba lagi nanti.');
         }
         const orders = db.orders || [];
         const reviews = db.reviews || [];

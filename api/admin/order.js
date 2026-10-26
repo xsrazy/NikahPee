@@ -1,5 +1,6 @@
 const {
     loadDB, withDB, noSave, getAuth, send, sendError, fail, readBody,
+    nameKey,
 } = require('../_lib');
 
 module.exports = async (req, res) => {
@@ -26,7 +27,12 @@ module.exports = async (req, res) => {
             if (idx === -1) {
                 return noSave(false);
             }
+            const victim = fresh.orders[idx].name;
             fresh.orders.splice(idx, 1);
+            // m7 fix: deleting an order also deletes its reviews, so a
+            // review never survives without its order (and the rating
+            // never counts a review whose order is gone).
+            fresh.reviews = (fresh.reviews || []).filter((r) => nameKey(r.name) !== nameKey(victim));
             return true;
         });
         if (!deleted) {

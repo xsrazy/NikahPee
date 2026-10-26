@@ -5,6 +5,9 @@ const {
 module.exports = async (req, res) => {
     if (req.method === 'GET') {
         try {
+            if (!rateLimit(`fol-read:${clientIp(req)}`, 120, 60 * 1000)) {
+                return sendError(res, 429, 'Terlalu banyak permintaan. Coba lagi nanti.');
+            }
             const db = await loadDB();
             const following = (db.follows || []).some((f) => f.ip === clientIp(req));
             return send(res, 200, { following, followers: (db.follows || []).length });

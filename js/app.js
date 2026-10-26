@@ -8,6 +8,23 @@
     const PRESENCE_LABEL = { datang: 'Datang', berhalangan: 'Berhalangan', ragu: 'Masih Ragu' };
     const FALLBACK_ISO = '2050-01-17T10:00:00+07:00';
     const CART_KEY = 'nikahpee-cart';
+    const TOKEN_KEY = 'nikahpee-tokens';
+
+    // M1 fix: per-order edit tokens, keyed by normalized guest name.
+    // Issued at checkout, required for order updates, cancels, and
+    // reviews under that name. Never sent for lookups (GET responses
+    // never contain a token).
+    const tokenNameKey = (n) => String(n || '').trim().toLowerCase();
+    function getTokens() {
+        try { return JSON.parse(localStorage.getItem(TOKEN_KEY) || '{}'); } catch (e) { return {}; }
+    }
+    function getTokenFor(name) { return getTokens()[tokenNameKey(name)] || null; }
+    function saveTokenFor(name, token) {
+        if (!token) { return; }
+        const t = getTokens();
+        t[tokenNameKey(name)] = token;
+        try { localStorage.setItem(TOKEN_KEY, JSON.stringify(t)); } catch (e) { /* ignore */ }
+    }
 
     let cfg = null;
     let selectedPresence = 'datang';
@@ -80,6 +97,7 @@
         carouselImgs = p.images;
         renderCarousel();
         renderGiftCards();
+        $('#coGift').disabled = false;
         startCountdown(p.wedding_iso);
     }
 
@@ -107,6 +125,9 @@
 
     // ---------- carousel ----------
     function renderCarousel() {
+        // m12 fix: reset the index on every render, so an early NaN
+        // from clicks before config loads cannot stick around.
+        carouselIdx = 0;
         const thumbs = $('#thumbs');
         thumbs.innerHTML = carouselImgs.map((src, i) =>
             `<img src="${esc(src)}" alt="Foto produk ${i + 1}" class="${i === carouselIdx ? 'active' : ''}" data-i="${i}">`).join('');
@@ -117,14 +138,17 @@
         showCarousel();
     }
     function showCarousel() {
+        if (!carouselImgs.length) { return; }
         $('#mainImg').src = carouselImgs[carouselIdx];
         $$('#thumbs img').forEach((img, i) => img.classList.toggle('active', i === carouselIdx));
     }
     $('#prevImg').addEventListener('click', () => {
+        if (!carouselImgs.length) { return; }
         carouselIdx = (carouselIdx - 1 + carouselImgs.length) % carouselImgs.length;
         showCarousel();
     });
     $('#nextImg').addEventListener('click', () => {
+        if (!carouselImgs.length) { return; }
         carouselIdx = (carouselIdx + 1) % carouselImgs.length;
         showCarousel();
     });
@@ -141,6 +165,7 @@
             const diff = target.getTime() - Date.now();
             if (diff <= 0) {
                 el.textContent = 'Flash Sale berakhir';
+                clearInterval(countdownTimer);
                 return;
             }
             const days = Math.floor(diff / 86400000);
@@ -210,8 +235,6 @@
 
     $('#cartBtn').addEventListener('click', () => { renderCart(); openPanel('#cartDrawer'); });
     $('#cartClose').addEventListener('click', () => closePanel('#cartDrawer'));
-    $('#chatBtn').addEventListener('click', () => openPanel('#chatPanel'));
-    $('#chatBtn2').addEventListener('click', () => openPanel('#chatPanel'));
     $('#chatClose').addEventListener('click', () => closePanel('#chatPanel'));
     // Backdrop click + Escape close any open panel (standard modal behavior).
     document.addEventListener('click', (e) => {
@@ -227,11 +250,27 @@
     $('#searchForm').addEventListener('submit', (e) => {
         e.preventDefault();
         document.getElementById('product').scrollIntoView({ behavior: 'smooth' });
-        toast(`Menampilkan produk untuk "${$('#searchInput').value.trim() || 'usra zee'}"`);
+        if (!cfg) {
+            toast('Toko masih memuat, coba lagi.');
+            return;
+        }
+        // m14 fix: match the query against real product text instead
+        // of claiming results unconditionally (single-product store).
+        const q = ($('#searchInput').value.trim() || 'usra zee').toLowerCase();
+        const hay = [cfg.product.title, cfg.shop.description, cfg.shop.announcement,
+            (cfg.shop.specs || []).map((r) => `${r.k} ${r.v}`).join('\n')].join('\n').toLowerCase();
+        toast(hay.includes(q)
+            ? `Menampilkan produk untuk "${q}"`
+            : `Produk tidak ditemukan untuk "${q}"`);
     });
 
     $('#addCartBtn').addEventListener('click', () => {
         const items = getCart();
+        // m15 fix: no duplicate drafts for the same variation + qty.
+        if (items.some((d) => d.presence === selectedPresence && d.qty === qty)) {
+            toast('Variasi ini sudah ada di keranjang');
+            return;
+        }
         items.push({ presence: selectedPresence, qty, added_at: new Date().toISOString() });
         setCart(items);
         toast('Ditambahkan ke keranjang');
@@ -253,13 +292,38 @@
         $('#coMessage').value = '';
         $('#coGift').checked = false;
         $('#giftCards').hidden = true;
+        // m17 fix: the gift checkbox stays disabled until config loads,
+        // so its cards can never render empty.
+        $('#coGift').disabled = !cfg;
+        const submitBtn = document.querySelector('#checkoutForm button[type="submit"]');
+        if (submitBtn) { submitBtn.disabled = false; }
         if (editName) {
-            // Prefill message/gift from the existing order when editing.
-            api('GET', `/api/order?name=${encodeURIComponent(editName)}`).then((o) => {
-                $('#coMessage').value = o.message || '';
-                $('#coGift').checked = Boolean(o.gift);
-                $('#giftCards').hidden = !o.gift;
-            }).catch(() => { /* keep blank */ });
+            // m11 fix: the submit button stays disabled until the
+            // prefill resolves, so a fast submit can never overwrite
+            // the stored message/gift with blanks. On failure the
+            // button stays disabled until a retry succeeds.
+            const errEl = $('#coError');
+            const runPrefill = () => {
+                if (submitBtn) { submitBtn.disabled = true; }
+                errEl.hidden = true;
+                errEl.innerHTML = '';
+                api('GET', `/api/order?name=${encodeURIComponent(editName)}`).then((o) => {
+                    $('#coMessage').value = o.message || '';
+                    $('#coGift').checked = Boolean(o.gift);
+                    $('#giftCards').hidden = !o.gift;
+                    if (submitBtn) { submitBtn.disabled = false; }
+                }).catch(() => {
+                    errEl.textContent = 'Gagal memuat pesanan lama. ';
+                    const rb = document.createElement('button');
+                    rb.type = 'button';
+                    rb.className = 'btn btn-outline';
+                    rb.textContent = 'Coba lagi';
+                    rb.addEventListener('click', runPrefill);
+                    errEl.appendChild(rb);
+                    errEl.hidden = false;
+                });
+            };
+            runPrefill();
         }
         openPanel('#checkoutModal');
     }
@@ -281,18 +345,20 @@
         const btn = e.submitter;
         if (btn) btn.disabled = true;
         try {
-            const order = await api('POST', '/api/order', {
+            const payload = {
                 name,
                 presence: checkoutCtx.presence,
                 qty: checkoutCtx.qty,
                 message: $('#coMessage').value.trim(),
                 gift: $('#coGift').checked,
-            });
-            if (checkoutCtx.draftIndex !== null && checkoutCtx.draftIndex !== undefined) {
-                const items = getCart();
-                items.splice(checkoutCtx.draftIndex, 1);
-                setCart(items);
-            }
+            };
+            const tok = getTokenFor(name);
+            if (tok) { payload.edit_token = tok; }
+            const order = await api('POST', '/api/order', payload);
+            if (order.edit_token) { saveTokenFor(name, order.edit_token); }
+            // m15 fix: any successful checkout clears all drafts, so a
+            // stale draft can never re-submit the same order later.
+            setCart([]);
             $('#coOrderNo').textContent = order.order_no;
             $('#coTracking').innerHTML = trackingHTML(order.presence);
             $('#coFormView').hidden = true;
@@ -333,16 +399,27 @@
             const data = await api('GET', '/api/follow');
             $('#followBtn').textContent = data.following ? '✓ Mengikuti' : '+ Ikuti';
             $('#followerCount').textContent = data.followers;
-        } catch (e) { /* follow state is best-effort */ }
+        } catch (e) {
+            // m17 fix: never show a possibly-wrong follow state after
+            // a failed load; disable until a refresh retries.
+            const b = $('#followBtn');
+            b.disabled = true;
+            b.title = 'Gagal memuat status follow, refresh halaman untuk mencoba lagi.';
+        }
     }
     $('#followBtn').addEventListener('click', async () => {
+        // m13 fix: in-flight guard, same pattern as the other submits.
+        const btn = $('#followBtn');
+        btn.disabled = true;
         try {
             const data = await api('POST', '/api/follow');
-            $('#followBtn').textContent = data.following ? '✓ Mengikuti' : '+ Ikuti';
+            btn.textContent = data.following ? '✓ Mengikuti' : '+ Ikuti';
             $('#followerCount').textContent = data.followers;
             toast(data.following ? 'Mengikuti toko ini' : 'Berhenti mengikuti toko ini');
         } catch (err) {
             toast(err.message);
+        } finally {
+            btn.disabled = false;
         }
     });
 
@@ -398,7 +475,11 @@
         const btn = e.submitter;
         if (btn) btn.disabled = true;
         try {
-            await api('POST', '/api/reviews', { name, stars: rvStars, text });
+            const payload = { name, stars: rvStars, text };
+            const tok = getTokenFor(name);
+            if (tok) { payload.edit_token = tok; }
+            const posted = await api('POST', '/api/reviews', payload);
+            if (posted.edit_token) { saveTokenFor(name, posted.edit_token); }
             $('#rvText').value = '';
             toast('Ulasan terkirim, terima kasih!');
             await loadReviews();
@@ -468,7 +549,11 @@
                 }
                 cancelBtn.disabled = true;
                 try {
-                    await api('POST', '/api/order/cancel', { name: o.name });
+                    const payload = { name: o.name };
+                    const tok = getTokenFor(o.name);
+                    if (tok) { payload.edit_token = tok; }
+                    const cancelled = await api('POST', '/api/order/cancel', payload);
+                    if (cancelled.edit_token) { saveTokenFor(o.name, cancelled.edit_token); }
                     toast('Pesanan dibatalkan');
                     await doLookup(o.name);
                 } catch (err) {
@@ -487,6 +572,30 @@
     });
 
     // ---------- chat ----------
+    // M2 fix: the guest thread loads this name's messages together
+    // with any seller replies, so replies are no longer dead letters.
+    async function loadChatThread() {
+        const wrap = $('#chatThread');
+        const name = $('#chatName').value.trim();
+        if (!name) {
+            wrap.innerHTML = '<p class="form-note">Isi nama untuk melihat pesan dan balasan penjual.</p>';
+            return;
+        }
+        try {
+            const list = await api('GET', `/api/chat?name=${encodeURIComponent(name)}`);
+            wrap.innerHTML = list.length === 0
+                ? '<p class="form-note">Belum ada pesan atas nama ini.</p>'
+                : list.map((m) =>
+                    `<div class="chat-msg"><p><strong>${esc(m.name)}</strong> <span class="meta">${esc(m.created_at)}</span></p><p>${esc(m.text)}</p>` +
+                    (m.reply ? `<div class="seller-reply"><strong>Balasan Penjual:</strong> ${esc(m.reply)}</div>` : '') +
+                    `</div>`).join('');
+        } catch (e) {
+            wrap.innerHTML = '<p class="form-note">Gagal memuat pesan.</p>';
+        }
+    }
+    $('#chatBtn').addEventListener('click', () => { openPanel('#chatPanel'); loadChatThread(); });
+    $('#chatBtn2').addEventListener('click', () => { openPanel('#chatPanel'); loadChatThread(); });
+    $('#chatName').addEventListener('change', loadChatThread);
     $('#chatForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const name = $('#chatName').value.trim();
@@ -501,7 +610,7 @@
             await api('POST', '/api/chat', { name, text });
             $('#chatText').value = '';
             toast('Pesan terkirim ke penjual');
-            closePanel('#chatPanel');
+            loadChatThread();
         } catch (err) {
             toast(err.message);
         } finally {

@@ -19,7 +19,7 @@ module.exports = async (req, res) => {
             return sendError(res, 400, 'Password baru minimal 8 karakter.');
         }
         if (!verifyPassword(old_password, db.settings.password)) {
-            return sendError(res, 401, 'Password lama salah.');
+            return sendError(res, 400, 'Password lama salah.');
         }
         const ok = await withDB(async (fresh) => {
             const innerAuth = getAuth(req, fresh);
@@ -36,7 +36,7 @@ module.exports = async (req, res) => {
             return true;
         });
         if (!ok) {
-            return sendError(res, 401, 'Password lama salah.');
+            return sendError(res, 400, 'Password lama salah.');
         }
         return send(res, 200, { status: true });
     } catch (err) {

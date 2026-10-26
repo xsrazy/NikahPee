@@ -40,9 +40,15 @@ module.exports = async (req, res) => {
         }
         const db = await loadDB();
         const { email, password } = await readBody(req);
+        // m6 fix: always run the scrypt check, even when the email is
+        // wrong, so both failure paths take equal time (no timing
+        // oracle for "email right, password wrong"). An empty email or
+        // password still fails fast, but empty is never a valid login.
+        const pwOk = typeof password === 'string' && password.length > 0 &&
+            verifyPassword(password, db.settings.password);
         if (!email || !password ||
             email !== db.settings.email ||
-            !verifyPassword(password, db.settings.password)) {
+            !pwOk) {
             return sendError(res, 401, 'Email atau password salah');
         }
         // A successful login clears the bucket: legitimate logins must

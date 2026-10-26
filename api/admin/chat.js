@@ -1,5 +1,6 @@
 const {
-    loadDB, withDB, noSave, getAuth, send, sendError, fail, readBody, adminChat,
+    loadDB, withDB, noSave, getAuth, send, sendError, fail, readBody, rateLimit, clientIp,
+    adminChat, paginate,
 } = require('../_lib');
 
 module.exports = async (req, res) => {
@@ -48,10 +49,13 @@ module.exports = async (req, res) => {
         if (!auth || !auth.admin) {
             return sendError(res, 401, 'Unauthorized');
         }
+        if (!rateLimit(`adm-chat:${clientIp(req)}`, 120, 60 * 1000)) {
+            return sendError(res, 429, 'Terlalu banyak permintaan. Coba lagi nanti.');
+        }
         const list = (db.chats || []).slice()
             .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
             .map(adminChat);
-        return send(res, 200, list);
+        return send(res, 200, paginate(list, req));
     } catch (err) {
         return fail(res, err);
     }

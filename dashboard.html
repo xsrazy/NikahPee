@@ -13,7 +13,7 @@
   <div class="dash-header-inner">
     <a class="logo" href="/">🛍️ <strong>Seller Centre</strong> <span class="logo-sub">NikahPee</span></a>
     <span class="shop-name">Usra &amp; Zee Official Store</span>
-    <button id="logoutBtn" class="btn btn-header" type="button" hidden>Logout</button>
+    <button id="logoutBtn" class="btn btn-header" type="button" hidden>Logout semua perangkat</button>
   </div>
 </header>
 
@@ -22,6 +22,7 @@
     <button type="button" class="nav-btn active" data-view="orders">📦 Pesanan</button>
     <button type="button" class="nav-btn" data-view="reviews">⭐ Ulasan</button>
     <button type="button" class="nav-btn" data-view="chat">💬 Chat</button>
+    <button type="button" class="nav-btn" data-view="follows">👥 Pengikut</button>
     <button type="button" class="nav-btn" data-view="product">🛒 Produk</button>
     <button type="button" class="nav-btn" data-view="stats">📊 Performa</button>
     <button type="button" class="nav-btn" data-view="settings">⚙️ Pengaturan</button>
@@ -48,6 +49,12 @@
       <h2>Chat Pembeli</h2>
       <div id="chatListAdmin"></div>
       <p id="chatEmptyAdmin" class="empty" hidden>Belum ada chat.</p>
+    </section>
+
+    <section id="view-follows" class="view" hidden>
+      <h2>Pengikut Toko</h2>
+      <div id="followListAdmin"></div>
+      <p id="followEmptyAdmin" class="empty" hidden>Belum ada pengikut.</p>
     </section>
 
     <section id="view-product" class="view" hidden>

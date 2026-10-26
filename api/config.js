@@ -1,4 +1,4 @@
-const { loadDB, send, sendError, fail } = require('./_lib');
+const { loadDB, send, sendError, fail, rateLimit, clientIp } = require('./_lib');
 
 const PRODUCT_TITLE = 'UNDANGAN PERNIKAHAN DIGITAL USRA & ZEE 17 JANUARI 2050 AKAD RESEPSI JAM GADANG BUKITTINGGI GRATIS';
 
@@ -19,6 +19,9 @@ module.exports = async (req, res) => {
         return sendError(res, 405, 'Method not allowed');
     }
     try {
+        if (!rateLimit(`cfg:${clientIp(req)}`, 120, 60 * 1000)) {
+            return sendError(res, 429, 'Terlalu banyak permintaan. Coba lagi nanti.');
+        }
         const db = await loadDB();
         const shop = db.settings.shop || {};
         const orders = db.orders || [];

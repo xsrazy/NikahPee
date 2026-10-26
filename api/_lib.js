@@ -3,8 +3,10 @@
 // Infra pattern follows the proven Wedify/NikahTube/samaWA shape:
 // versioned immutable docs, scrypt passwords, HS256 JWT with
 // token-version revocation, optimistic-concurrency writes, LRU rate
-// limits, last-XFF client IP. NikahPee has NO guest access key: guests
-// act by name, admin acts by Bearer JWT only.
+// limits, last-XFF client IP. Guests act by name for reads and chat,
+// but order writes (update/cancel) and reviews require a private edit
+// token issued at checkout and kept in the guest's localStorage;
+// admin acts by Bearer JWT only.
 const crypto = require('crypto');
 
 const BLOB_API = 'https://vercel.com/api/blob/';
@@ -167,6 +169,11 @@ const saveDB = async (db) => {
 // runs against the newest version; if another writer saved meanwhile,
 // the mutation is re-applied on the fresh version. Mutators must be
 // re-runnable and return either their result or noSave(value).
+// RESIDUAL RISK (accepted, documented 2026-10-26): the version check
+// and the save are two separate Blob calls, so two writers that both
+// pass the check before either saves can still lose one update. The
+// window is tiny and traffic is low; a single-writer queue would be
+// needed to close it fully.
 async function withDB(mutator) {
     for (let attempt = 0; attempt < 6; attempt++) {
         const { db, version, newestCorrupt } = await loadDBVersioned();
@@ -431,6 +438,36 @@ const newOrderNo = () =>
 
 const newId = () => `${Date.now().toString(36)}-${crypto.randomBytes(4).toString('hex')}`;
 
+// Private per-order edit token (M1 fix, 2026-10-26). Issued at checkout,
+// returned once, stored in the guest's localStorage. Required for order
+// updates, cancels, and reviews under that name. Never exposed through
+// publicOrder/publicReview (both are whitelists). Orders created before
+// tokens existed have no token: their first name-based write issues one
+// (migration) and returns it, so no guest is locked out of an old order.
+const newEditToken = () => crypto.randomBytes(16).toString('hex');
+
+// Pagination for list endpoints (m4 fix, 2026-10-26). When the caller
+// passes per/next explicitly, returns { items, next } (next is the next
+// offset, or null when the page is the last). When neither is passed,
+// returns the full list unchanged so the dashboard keeps rendering the
+// full list as before.
+const pageParams = (req) => {
+    const perRaw = parseInt(String(req.query.per ?? ''), 10);
+    const nextRaw = parseInt(String(req.query.next ?? ''), 10);
+    const per = Number.isInteger(perRaw) && perRaw >= 1 && perRaw <= 1000 ? perRaw : 1000;
+    const next = Number.isInteger(nextRaw) && nextRaw >= 0 ? nextRaw : 0;
+    return { per, next };
+};
+
+const paginate = (list, req) => {
+    if (req.query.per === undefined && req.query.next === undefined) {
+        return list;
+    }
+    const { per, next } = pageParams(req);
+    const items = list.slice(next, next + per);
+    return { items, next: next + items.length < list.length ? next + items.length : null };
+};
+
 // Strict validators: no silent coercion. Strings must be real strings,
 // integers real JSON numbers, booleans real booleans.
 const isName = (v) => typeof v === 'string' && v.trim().length >= 1 && v.trim().length <= 100;
@@ -485,4 +522,5 @@ module.exports = {
     PRESENCE, PRESENCE_LABEL, STATUS_LABEL, nameKey, newOrderNo, newId,
     isName, isText, isOptText, isQty, isStars,
     publicOrder, adminOrder, publicReview, adminReview, publicChat, adminChat,
+    newEditToken, pageParams, paginate,
 };

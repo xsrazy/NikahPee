@@ -81,6 +81,7 @@
         if (name === 'orders') { loadOrders(); }
         if (name === 'reviews') { loadReviewsAdmin(); }
         if (name === 'chat') { loadChatAdmin(); }
+        if (name === 'follows') { loadFollowsAdmin(); }
         if (name === 'product') { loadProductForm(); }
         if (name === 'stats') { loadStats(); }
     }
@@ -99,7 +100,14 @@
                 return;
             }
             if (btn) btn.disabled = true;
-            try { await action(); } finally { btn.disabled = false; }
+            // m18 fix: a failed action disarms immediately, so the next
+            // click within the 4s window cannot delete without a fresh
+            // confirmation (the timeout reset stays as a backstop).
+            try { await action(); } finally {
+                btn.disabled = false;
+                btn.dataset.armed = '';
+                btn.textContent = label;
+            }
         });
     }
 
@@ -240,6 +248,36 @@
         }
     }
 
+    // ---------- follows (m10 fix: the list/delete endpoints finally
+    // have a dashboard view, reusing the card + armable pattern) ----------
+    async function loadFollowsAdmin() {
+        try {
+            const list = await apiAdmin('GET', '/api/admin/follows');
+            const wrap = $('#followListAdmin');
+            $('#followEmptyAdmin').hidden = list.length !== 0;
+            wrap.innerHTML = '';
+            list.forEach((f) => {
+                const card = document.createElement('div');
+                card.className = 'item-card';
+                card.innerHTML =
+                    `<h3>${esc(f.ip)}</h3>` +
+                    `<p class="meta">Mengikuti sejak: ${esc(f.created_at)}</p>` +
+                    `<div class="row-actions"><button type="button" class="btn btn-danger">Hapus Pengikut</button></div>`;
+                const delBtn = $('button', card);
+                armable(delBtn, 'Hapus Pengikut', async () => {
+                    await apiAdmin('DELETE', '/api/admin/follow', { ip: f.ip });
+                    toast('Pengikut dihapus');
+                    loadFollowsAdmin();
+                });
+                wrap.appendChild(card);
+            });
+        } catch (err) {
+            if (err.message !== 'Sesi berakhir, silakan login ulang.') {
+                toast(err.message);
+            }
+        }
+    }
+
     // ---------- product ----------
     async function loadProductForm() {
         try {
@@ -360,12 +398,21 @@
     async function logout() {
         const token = getToken();
         if (token) {
-            try {
-                await fetch('/api/session', {
-                    method: 'DELETE',
-                    headers: { Authorization: `Bearer ${token}` },
-                });
-            } catch (e) { /* best-effort revoke */ }
+            // m9 fix: retry the revoke once, and warn instead of
+            // silently clearing when the server session survives.
+            let revoked = false;
+            for (let attempt = 0; attempt < 2 && !revoked; attempt++) {
+                try {
+                    const res = await fetch('/api/session', {
+                        method: 'DELETE',
+                        headers: { Authorization: `Bearer ${token}` },
+                    });
+                    revoked = res.ok;
+                } catch (e) { /* retry once */ }
+            }
+            if (!revoked) {
+                toast('Sesi server mungkin masih berlaku, token lama belum tercabut.');
+            }
         }
         clearToken();
         showLogin();
