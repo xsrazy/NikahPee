@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seller Centre - NikahPee</title>
+<meta name="description" content="Seller Centre NikahPee: kelola pesanan, ulasan, chat, produk, dan performa toko Usra &amp; Zee Official Store.">
+<link rel="icon" href="/assets/images/favicon.ico">
+<link rel="stylesheet" href="/css/dashboard.css">
+</head>
+<body>
+<header class="dash-header">
+  <div class="dash-header-inner">
+    <a class="logo" href="/">🛍️ <strong>Seller Centre</strong> <span class="logo-sub">NikahPee</span></a>
+    <span class="shop-name">Usra &amp; Zee Official Store</span>
+    <button id="logoutBtn" class="btn btn-header" type="button" hidden>Logout</button>
+  </div>
+</header>
+
+<div class="dash-layout">
+  <nav class="sidebar">
+    <button type="button" class="nav-btn active" data-view="orders">📦 Pesanan</button>
+    <button type="button" class="nav-btn" data-view="reviews">⭐ Ulasan</button>
+    <button type="button" class="nav-btn" data-view="chat">💬 Chat</button>
+    <button type="button" class="nav-btn" data-view="product">🛒 Produk</button>
+    <button type="button" class="nav-btn" data-view="stats">📊 Performa</button>
+    <button type="button" class="nav-btn" data-view="settings">⚙️ Pengaturan</button>
+  </nav>
+
+  <main class="dash-main">
+    <section id="view-orders" class="view">
+      <h2>Pesanan</h2>
+      <form id="orderSearchForm" class="search-row">
+        <input id="orderSearch" type="search" placeholder="Cari nama / nomor pesanan...">
+        <button type="submit" class="btn btn-primary">Cari</button>
+      </form>
+      <div id="orderList"></div>
+      <p id="orderEmpty" class="empty" hidden>Belum ada pesanan.</p>
+    </section>
+
+    <section id="view-reviews" class="view" hidden>
+      <h2>Ulasan Pembeli</h2>
+      <div id="reviewListAdmin"></div>
+      <p id="reviewEmptyAdmin" class="empty" hidden>Belum ada ulasan.</p>
+    </section>
+
+    <section id="view-chat" class="view" hidden>
+      <h2>Chat Pembeli</h2>
+      <div id="chatListAdmin"></div>
+      <p id="chatEmptyAdmin" class="empty" hidden>Belum ada chat.</p>
+    </section>
+
+    <section id="view-product" class="view" hidden>
+      <h2>Produk</h2>
+      <p class="note">Harga Rp0 dan foto produk tidak bisa diubah di sini (harga Rp0 adalah konsep toko ini).</p>
+      <form id="productForm">
+        <label>Pengumuman Toko
+          <textarea id="prodAnnouncement" rows="3" maxlength="5000"></textarea>
+        </label>
+        <label>Deskripsi Produk
+          <textarea id="prodDescription" rows="12" maxlength="5000"></textarea>
+        </label>
+        <label>Spesifikasi (satu per baris, format "Label: Nilai")
+          <textarea id="prodSpecs" rows="10" maxlength="5000"></textarea>
+        </label>
+        <button type="submit" class="btn btn-primary">Simpan Produk</button>
+      </form>
+    </section>
+
+    <section id="view-stats" class="view" hidden>
+      <h2>Performa Toko</h2>
+      <div id="statsGrid" class="stats-grid"></div>
+    </section>
+
+    <section id="view-settings" class="view" hidden>
+      <h2>Pengaturan</h2>
+      <form id="pwForm">
+        <label>Password Lama
+          <input id="pwOld" type="password" autocomplete="current-password" required>
+        </label>
+        <label>Password Baru (minimal 8 karakter)
+          <input id="pwNew" type="password" autocomplete="new-password" required>
+        </label>
+        <label>Ulangi Password Baru
+          <input id="pwNew2" type="password" autocomplete="new-password" required>
+        </label>
+        <p id="pwError" class="form-error" hidden></p>
+        <button type="submit" class="btn btn-primary">Ubah Password</button>
+      </form>
+      <p class="note">Setelah password diubah, kamu akan logout dan harus login ulang.</p>
+    </section>
+  </main>
+</div>
+
+<div id="loginPanel" class="panel">
+  <div class="panel-box">
+    <h2>Login Seller Centre</h2>
+    <p class="note">Masuk sebagai admin NikahPee.</p>
+    <form id="loginForm">
+      <label>Email
+        <input id="loginEmail" type="email" autocomplete="username" required>
+      </label>
+      <label>Password
+        <input id="loginPassword" type="password" autocomplete="current-password" required>
+      </label>
+      <p id="loginError" class="form-error" hidden></p>
+      <button type="submit" class="btn btn-primary btn-big">Login</button>
+    </form>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+<script src="/js/dash.js"></script>
+</body>
+</html>
