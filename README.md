@@ -2,9 +2,9 @@
 
 A Shopee-style digital wedding invitation. The invitation is a product page: the wedding itself is the product, attendance is the variation, and ordering is the RSVP.
 
-**Live demo:** https://nikahpee.vercel.app
+**Live demo:** https://nikahpee.xsrazy.web.id
 
-![Usra and Zee couple art](assets/images/couple.webp)
+![NikahPee: Usra & Zee Official Store, Rp0, Diskon 100%](assets/images/og-image.jpg)
 
 ## About
 
