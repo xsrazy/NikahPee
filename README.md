@@ -24,6 +24,16 @@ The couple is Usra & Zee. The event date is Monday, 17 January 2050 (Akad 10.00,
 - **Other products:** "Produk Lain dari Toko Ini" links to the author's five other invitations.
 - **Seller Centre dashboard:** fresh dashboard with Pesanan, Ulasan, Chat, Produk, Performa, and Pengaturan. It is not a reuse of the older wedding admin templates.
 
+## Screenshots
+
+Live shop page, captured from https://nikahpee.xsrazy.web.id:
+
+![NikahPee shop page on desktop](docs/screenshots/shop-desktop.png)
+
+![NikahPee shop page on mobile](docs/screenshots/shop-mobile.png)
+
+The dashboard requires admin login, so only the public shop page is shown here.
+
 ## Architecture
 
 - **Frontend:** static pages (`index.html`, `dashboard.html`) with vanilla JavaScript (`js/app.js`, `js/dash.js`) and plain CSS (`css/app.css`, `css/dashboard.css`). No framework, no build step.
